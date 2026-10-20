@@ -11,8 +11,13 @@ clear 2>/dev/null || true
 
 if [[ "$target" != "1" ]]; then
     echo "Unattended install to $target ..."
-    if ! kiosk-install --yes --after "$after" "$target"; then
-        echo "KIOSK-INSTALL-FAILED $target" | tee /dev/ttyS0 2>/dev/null
+    # Markers go to the serial/console too: the service's stdout is tty1, stderr the journal.
+    if kiosk-install --yes --after none "$target"; then
+        echo "KIOSK-INSTALL-OK $target ($VERSION)" | tee /dev/ttyS0 /dev/console >/dev/null 2>&1
+        sleep 2
+        case "$after" in reboot) systemctl reboot ;; poweroff) systemctl poweroff ;; esac
+    else
+        echo "KIOSK-INSTALL-FAILED $target" | tee /dev/ttyS0 /dev/console >/dev/null 2>&1
         sleep 30; systemctl poweroff
     fi
     exit 0
