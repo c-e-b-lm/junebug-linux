@@ -23,7 +23,7 @@ jobs:
       tag: ${{ steps.check.outputs.tag }}
       reason: ${{ steps.check.outputs.reason }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
