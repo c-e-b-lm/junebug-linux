@@ -5,7 +5,8 @@ Only keys starting with `KIOSK_` plus `UPDATE_URL`/`UPDATE_CHANNEL` are accepted
 
 | Key | Default | Meaning |
 |---|---|---|
-| `KIOSK_URL` | welcome page | Start URL (`http(s)://` or `file://`). Also settable via kernel parameter `kiosk.url=` |
+| `KIOSK_URL` | empty | Empty: opens `https://www.google.com/` with address bar and tabs. Set a start URL (`http(s)://` or `file://`) to use kiosk mode with `KIOSK_MODE=auto`. Also settable via kernel parameter `kiosk.url=` |
+| `KIOSK_MODE` | `auto` | `auto`: kiosk only when a URL is set; `browser`: always show browser controls; `kiosk`: always hide controls. Also settable via kernel parameter `kiosk.mode=` |
 | `KIOSK_LANG` | `de` | Browser UI language |
 | `KIOSK_KEYMAP` | `de` | XKB layout, optional variant after a colon (`ch:de_nodeadkeys`) |
 | `KIOSK_SCALE` | `1` | Device scale factor (1, 1.25, 1.5, 2) |

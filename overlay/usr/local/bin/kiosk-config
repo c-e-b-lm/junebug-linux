@@ -1,7 +1,7 @@
 #!/bin/bash
 # Merge kiosk configuration from all sources and apply system-level settings.
 # Precedence (later wins): built-in defaults -> boot medium kiosk.conf -> ESP kiosk.conf
-#   -> USB stick labelled KIOSKCFG -> systemd credential kiosk.conf -> kernel cmdline (kiosk.url=, kiosk.debug=)
+#   -> USB stick labelled KIOSKCFG -> systemd credential kiosk.conf -> kernel cmdline
 set -euo pipefail
 source /usr/share/kiosk/lib.sh
 export KIOSK_TAG=kiosk-config
@@ -58,6 +58,7 @@ done
 parse_conf /run/credentials/@system/kiosk.conf
 # 6. kernel command line
 if v="$(kiosk_cmdline_get kiosk.url)"; then CFG[KIOSK_URL]="$v"; fi
+if v="$(kiosk_cmdline_get kiosk.mode)"; then CFG[KIOSK_MODE]="$v"; fi
 if v="$(kiosk_cmdline_get kiosk.debug)"; then CFG[KIOSK_DEBUG]="$v"; fi
 
 # --- write merged config -------------------------------------------------------
@@ -154,7 +155,8 @@ if [[ -d /etc/firefox/policies ]]; then
        --argjson block "$(to_array "$(cfg KIOSK_URL_BLOCKLIST)")" \
        --argjson capture "$([[ "$(cfg KIOSK_MEDIA_CAPTURE 0)" == 1 ]] && echo true || echo false)" \
        --arg origin "$origin" --arg url "$url" '
-       .policies.Homepage = {URL: $url, Locked: true}
+       (if $url != "" then .policies.Homepage = {URL: $url, Locked: true}
+        else del(.policies.Homepage) end)
        | (if ($block|length) > 0 then .policies.WebsiteFilter = {Block: $block, Exceptions: $allow} else . end)
        | (if $capture then .policies.Permissions = {Camera: {Allow: [$origin]}, Microphone: {Allow: [$origin]}} else . end)' \
        /etc/firefox/policies/policies.json > /etc/firefox/policies/policies.json.tmp \

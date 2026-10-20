@@ -41,7 +41,7 @@ volatile. A reboot restores the pristine state.
 systemd (graphical.target)
  ├─ kiosk-config.service   merges kiosk.conf sources → /run/kiosk/{config,env}; hostname, tz, Wi-Fi, SSH, browser policies
  ├─ NetworkManager, systemd-resolved, systemd-timesyncd, pipewire (user)
- ├─ kiosk.service          User=kiosk on tty1, PAM session via logind → cage -d -- <browser> --kiosk URL ; Restart=always
+ ├─ kiosk.service          User=kiosk on tty1, PAM session via logind → cage -d -- <browser> [--kiosk] [URL] ; Restart=always
  ├─ kiosk-mark-good        (installed only) 90 s after start: browser alive → clear trial flag in grubenv
  ├─ kiosk-update-onboot.timer (15 min after boot, no reboot) / kiosk-update.timer (03:00, may reboot)
  ├─ kiosk-installer.service  only with kiosk.installer= on the command line (replaces the session)

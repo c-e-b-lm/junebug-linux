@@ -16,8 +16,10 @@
 </p>
 
 Junebug (German: *Maikäfer*) is a minimal, image-based Linux in the spirit of
-[Porteus Kiosk](https://porteus-kiosk.org/): it starts straight into a full-screen Google Chrome,
-has no desktop, no package manager and nothing to click out of. It is built from stock Debian with
+[Porteus Kiosk](https://porteus-kiosk.org/): it starts straight into Google Chrome,
+on Google with an address bar and tabs when no start URL is configured. A configured URL enables kiosk
+mode; `KIOSK_MODE=browser` keeps browser controls visible even with a start URL.
+It has no desktop or login screen. It is built from stock Debian with
 plain shell scripts, so every byte in the image is traceable, and it updates itself from signed
 GitHub releases.
 
@@ -25,7 +27,7 @@ GitHub releases.
 
 | | |
 |---|---|
-| **Browser-only** | Chrome stable in kiosk mode on the [cage](https://github.com/cage-kiosk/cage) Wayland compositor. No desktop, no window manager, no login screen. Firefox and Debian Chromium are build options. |
+| **Browser-only** | Chrome stable with normal browser controls by default, optional kiosk mode, on the [cage](https://github.com/cage-kiosk/cage) Wayland compositor. No desktop, no window manager, no login screen. Firefox and Debian Chromium are build options. |
 | **Runs almost anywhere** | Any x86-64 PC from roughly 2008 on: legacy BIOS and UEFI, Secure Boot (Debian shim), Intel/AMD/NVIDIA graphics with software-rendering fallback, Wi-Fi firmware for Intel, Realtek, Atheros, Broadcom and MediaTek. |
 | **Newest Debian kernel** | Linux from `trixie-backports`, signed for Secure Boot. Switch to `sid` for the bleeding edge. |
 | **Read-only, stateless** | Squashfs root, tmpfs overlay, volatile journal. A reboot restores a pristine system. |
@@ -40,7 +42,7 @@ GitHub releases.
    ```sh
    dd if=junebug-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
    ```
-3. Boot from the stick. The welcome page explains how to set the start URL.
+3. Boot from the stick. The browser opens Google with an address bar and tabs. Setting `KIOSK_URL` enables kiosk mode; use `KIOSK_MODE=browser` for a start URL with browser controls.
 4. For a permanent installation with automatic updates choose **Install to disk** in the boot menu.
    Afterwards edit `kiosk.conf` on the `KIOSK_EFI` partition (FAT32, readable from any PC):
    ```ini
@@ -63,7 +65,7 @@ All keys are documented in [docs/CONFIG.md](docs/CONFIG.md) and in the commented
 3. `kiosk.conf` on the `KIOSK_EFI` partition (installed systems)
 4. `kiosk.conf` on any USB stick labelled `KIOSKCFG`
 5. systemd system credential `kiosk.conf` (SMBIOS, VMs)
-6. kernel command line: `kiosk.url=...`, `kiosk.debug=1`
+6. kernel command line: `kiosk.url=...`, `kiosk.mode=browser`, `kiosk.debug=1`
 
 ## How it works
 
@@ -71,7 +73,7 @@ All keys are documented in [docs/CONFIG.md](docs/CONFIG.md) and in the commented
 GRUB / isolinux ──▶ Debian kernel + live-boot initramfs ──▶ squashfs (read-only) + tmpfs overlay
                                                                │
                       systemd ── kiosk-config (merge kiosk.conf, Wi-Fi, policies)
-                              ├─ kiosk.service: cage ──▶ google-chrome --kiosk <URL>
+                              ├─ kiosk.service: cage ──▶ google-chrome [--kiosk] [URL]
                               ├─ kiosk-update.timer: signed manifest ──▶ inactive slot ──▶ trial boot
                               └─ kiosk-mark-good: browser alive after 90 s ──▶ slot confirmed
 ```
