@@ -17,6 +17,23 @@ Quick iteration without rebuilding the rootfs: edit `overlay/` or `boot/`, then
 `sudo scripts/build-rootfs.sh` is only needed when packages or chroot-setup change; otherwise copy
 overlay changes into `out/rootfs` and re-run `sudo scripts/build-iso.sh`.
 
+## Building with Docker (no root on the host needed)
+
+Any x86-64 host with Docker works, e.g. a VPS or a Debian 12 box without sudo rights:
+
+```sh
+git clone https://github.com/kaeferfreund/junebug-linux.git && cd junebug-linux
+docker run --rm --privileged -v "$PWD:/src" -w /src -e VERSION=2026.10.20-dev -e DEBIAN_FRONTEND=noninteractive \
+  debian:trixie bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+    mmdebstrap squashfs-tools xorriso mtools dosfstools jq curl ca-certificates minisign git make \
+    && git config --global --add safe.directory /src && make rootfs iso manifest'
+ls -lh out/release/
+```
+
+`--privileged` is needed because mmdebstrap mounts /proc and /dev inside the chroot. On a 4-core
+VPS the whole build takes about 4 minutes; the ISO is roughly 870 MB. QEMU boot tests need
+`/dev/kvm` to be usable, so run them on the host or leave them to CI.
+
 Run the ISO in QEMU by hand:
 
 ```sh

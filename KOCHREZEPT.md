@@ -48,6 +48,11 @@ Lokal (Debian/Ubuntu x86-64, root nötig):
 make deps && make iso && make test-boot
 ```
 
+Ohne root, aber mit Docker (z. B. auf einem VPS): siehe "Building with Docker" in
+[docs/BUILDING.md](docs/BUILDING.md), ca. 4 Minuten auf 4 Kernen. Ein so gebautes ISO lässt sich
+als **Pre-Release** veröffentlichen (Tag ohne `v`-Präfix, z. B. `dev-2026.10.20`, damit
+`release.yml` nicht anspringt); Geräte ignorieren Pre-Releases.
+
 ## 2. Release erstellen
 
 Versionen folgen CalVer: `vJAHR.MONAT.TAG`, bei mehreren Releases am Tag `vJAHR.MONAT.TAG.N`.
