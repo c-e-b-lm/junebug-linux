@@ -1,0 +1,12 @@
+[Unit]
+Description=Kiosk: CI self test (only with system credential kiosk.selftest)
+After=kiosk.service
+ConditionCredential=kiosk.selftest
+
+[Service]
+Type=oneshot
+ImportCredential=kiosk.selftest
+ExecStart=/usr/local/bin/kiosk-selftest
+
+[Install]
+WantedBy=graphical.target

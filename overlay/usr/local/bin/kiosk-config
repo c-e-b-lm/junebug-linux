@@ -1,0 +1,164 @@
+#!/bin/bash
+# Merge kiosk configuration from all sources and apply system-level settings.
+# Precedence (later wins): built-in defaults -> boot medium kiosk.conf -> ESP kiosk.conf
+#   -> USB stick labelled KIOSKCFG -> systemd credential kiosk.conf -> kernel cmdline (kiosk.url=, kiosk.debug=)
+set -euo pipefail
+source /usr/share/kiosk/lib.sh
+export KIOSK_TAG=kiosk-config
+mkdir -p "$KIOSK_RUN"
+declare -A CFG
+NETDIRS=()
+
+parse_conf() { # file
+    local line key val
+    [[ -r "$1" ]] || return 0
+    kiosk_log "reading $1"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%$'\r'}"
+        [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
+        [[ "$line" =~ ^[[:space:]]*([A-Z][A-Z0-9_]*)=(.*)$ ]] || continue
+        key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"
+        [[ "$key" =~ ^(KIOSK_[A-Z0-9_]+|UPDATE_URL|UPDATE_CHANNEL)$ ]] || continue
+        # strip one layer of matching quotes
+        if [[ "$val" =~ ^\"(.*)\"$ ]] || [[ "$val" =~ ^\'(.*)\'$ ]]; then val="${BASH_REMATCH[1]}"; fi
+        CFG["$key"]="$val"
+    done < "$1"
+}
+
+# 1. defaults
+parse_conf /etc/kiosk/kiosk.conf
+# 2. boot medium root (ISO root, or data partition root)
+if mountpoint -q /run/live/medium; then
+    parse_conf /run/live/medium/kiosk.conf
+    [[ -d /run/live/medium/network ]] && NETDIRS+=(/run/live/medium/network)
+fi
+# 3. ESP of an installed system
+if kiosk_slot >/dev/null; then
+    if esp="$(kiosk_esp_mount)"; then
+        parse_conf "$esp/kiosk.conf"
+        [[ -d "$esp/network" ]] && NETDIRS+=("$esp/network")
+    else
+        kiosk_log "installed system but no KIOSK_EFI partition found"
+    fi
+fi
+# 4. configuration stick
+for dev in $(blkid -t LABEL=KIOSKCFG -o device 2>/dev/null || true); do
+    tmp="$(mktemp -d)"
+    if mount -o ro "$dev" "$tmp" 2>/dev/null; then
+        parse_conf "$tmp/kiosk.conf"
+        if [[ -d "$tmp/network" ]]; then
+            mkdir -p "$KIOSK_RUN/network-stick"; cp "$tmp"/network/*.nmconnection "$KIOSK_RUN/network-stick/" 2>/dev/null || true
+            NETDIRS+=("$KIOSK_RUN/network-stick")
+        fi
+        umount "$tmp"
+    fi
+    rmdir "$tmp"
+done
+# 5. systemd system credential (e.g. SMBIOS io.systemd.credential:kiosk.conf=...)
+parse_conf /run/credentials/@system/kiosk.conf
+# 6. kernel command line
+if v="$(kiosk_cmdline_get kiosk.url)"; then CFG[KIOSK_URL]="$v"; fi
+if v="$(kiosk_cmdline_get kiosk.debug)"; then CFG[KIOSK_DEBUG]="$v"; fi
+
+# --- write merged config -------------------------------------------------------
+sq() { local s="${1//\'/\'\\\'\'}"; printf "'%s'" "$s"; }
+SECRET_RE='^(KIOSK_WIFI_PSK|KIOSK_ROOT_PASSWORD|KIOSK_SSH_AUTHORIZED_KEYS)$'
+umask 077
+: > "$KIOSK_CONFIG"
+: > "$KIOSK_ENV.tmp"
+for key in $(printf '%s\n' "${!CFG[@]}" | sort); do
+    printf '%s=%s\n' "$key" "$(sq "${CFG[$key]}")" >> "$KIOSK_CONFIG"
+    [[ "$key" =~ $SECRET_RE ]] || printf '%s=%s\n' "$key" "$(sq "${CFG[$key]}")" >> "$KIOSK_ENV.tmp"
+done
+chmod 0644 "$KIOSK_ENV.tmp"; mv "$KIOSK_ENV.tmp" "$KIOSK_ENV"
+umask 022
+
+cfg() { printf '%s' "${CFG[$1]:-${2:-}}"; }
+
+# --- apply -----------------------------------------------------------------------
+h="$(cfg KIOSK_HOSTNAME kiosk)"
+if [[ "$h" =~ ^[a-zA-Z0-9-]{1,63}$ ]]; then
+    echo "$h" > /etc/hostname; hostname "$h"
+    sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$h/" /etc/hosts
+fi
+
+tz="$(cfg KIOSK_TIMEZONE)"
+if [[ -n "$tz" && -f "/usr/share/zoneinfo/$tz" && "$tz" != *..* ]]; then
+    ln -sfn "/usr/share/zoneinfo/$tz" /etc/localtime; echo "$tz" > /etc/timezone
+fi
+
+if [[ -n "$(cfg KIOSK_NTP_SERVER)" ]]; then
+    mkdir -p /etc/systemd/timesyncd.conf.d
+    printf '[Time]\nNTP=%s\n' "$(cfg KIOSK_NTP_SERVER)" > /etc/systemd/timesyncd.conf.d/kiosk.conf
+fi
+
+# Wi-Fi: KIOSK_WIFI_SSID (+ KIOSK_WIFI_PSK for WPA2/3-PSK, empty = open network)
+NMDIR=/etc/NetworkManager/system-connections
+mkdir -p "$NMDIR"
+if [[ -n "$(cfg KIOSK_WIFI_SSID)" ]]; then
+    {
+        printf '[connection]\nid=kiosk-wifi\ntype=wifi\nautoconnect=true\nautoconnect-retries=0\n\n'
+        printf '[wifi]\nssid=%s\nmode=infrastructure\n\n' "$(cfg KIOSK_WIFI_SSID)"
+        if [[ -n "$(cfg KIOSK_WIFI_PSK)" ]]; then
+            printf '[wifi-security]\nkey-mgmt=wpa-psk\npsk=%s\n\n' "$(cfg KIOSK_WIFI_PSK)"
+        fi
+        printf '[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\n'
+    } > "$NMDIR/kiosk-wifi.nmconnection"
+    chmod 0600 "$NMDIR/kiosk-wifi.nmconnection"
+fi
+# Extra NetworkManager keyfiles (static IPs, enterprise Wi-Fi, ...) from network/ directories
+for d in "${NETDIRS[@]}"; do
+    for f in "$d"/*.nmconnection; do
+        [[ -f "$f" ]] || continue
+        install -m 0600 "$f" "$NMDIR/$(basename "$f")"
+    done
+done
+if systemctl -q is-active NetworkManager.service 2>/dev/null; then nmcli connection reload || true; fi
+
+# Remote access: SSH with authorized keys (root, key-only), optional root password + tty2 shell
+if [[ -n "$(cfg KIOSK_SSH_AUTHORIZED_KEYS)" ]]; then
+    install -d -m 0700 /root/.ssh
+    tr ';' '\n' <<<"$(cfg KIOSK_SSH_AUTHORIZED_KEYS)" | sed '/^\s*$/d' > /root/.ssh/authorized_keys
+    chmod 0600 /root/.ssh/authorized_keys
+    ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1 || ssh-keygen -A >/dev/null
+    systemctl --no-block start ssh.service
+fi
+if [[ -n "$(cfg KIOSK_ROOT_PASSWORD)" ]]; then
+    printf 'root:%s\n' "$(cfg KIOSK_ROOT_PASSWORD)" | chpasswd
+    systemctl --no-block start getty@tty2.service
+fi
+if [[ "$(cfg KIOSK_DEBUG 0)" == "1" ]]; then
+    systemctl --no-block start getty@tty2.service
+fi
+
+# Browser policies that depend on configuration
+url="$(cfg KIOSK_URL)"
+origin="$(sed -E 's#^(https?://[^/]+).*#\1#' <<<"$url")"
+to_array() { jq -cn --arg s "$1" '$s | split(" ") | map(select(length>0))'; }
+policy="$(jq -n \
+    --argjson allow "$(to_array "$(cfg KIOSK_URL_ALLOWLIST)")" \
+    --argjson block "$(to_array "$(cfg KIOSK_URL_BLOCKLIST)")" \
+    --argjson printing "$([[ "$(cfg KIOSK_PRINTING 0)" == 1 ]] && echo true || echo false)" \
+    --argjson downloads "$([[ "$(cfg KIOSK_DOWNLOADS 0)" == 1 ]] && echo 0 || echo 3)" \
+    --argjson capture "$([[ "$(cfg KIOSK_MEDIA_CAPTURE 0)" == 1 ]] && echo true || echo false)" \
+    --arg origin "$origin" '
+    {PrintingEnabled: $printing, DownloadRestrictions: $downloads}
+    + (if ($allow|length) > 0 then {URLAllowlist: $allow} else {} end)
+    + (if ($block|length) > 0 then {URLBlocklist: $block} else {} end)
+    + (if $capture and ($origin|startswith("http")) then {VideoCaptureAllowedUrls: [$origin], AudioCaptureAllowedUrls: [$origin]} else {} end)')"
+for d in /etc/opt/chrome/policies/managed /etc/chromium/policies/managed; do
+    [[ -d "$d" ]] && printf '%s\n' "$policy" > "$d/90-runtime.json"
+done
+if [[ -d /etc/firefox/policies ]]; then
+    jq --argjson allow "$(to_array "$(cfg KIOSK_URL_ALLOWLIST)")" \
+       --argjson block "$(to_array "$(cfg KIOSK_URL_BLOCKLIST)")" \
+       --argjson capture "$([[ "$(cfg KIOSK_MEDIA_CAPTURE 0)" == 1 ]] && echo true || echo false)" \
+       --arg origin "$origin" --arg url "$url" '
+       .policies.Homepage = {URL: $url, Locked: true}
+       | (if ($block|length) > 0 then .policies.WebsiteFilter = {Block: $block, Exceptions: $allow} else . end)
+       | (if $capture then .policies.Permissions = {Camera: {Allow: [$origin]}, Microphone: {Allow: [$origin]}} else . end)' \
+       /etc/firefox/policies/policies.json > /etc/firefox/policies/policies.json.tmp \
+       && mv /etc/firefox/policies/policies.json.tmp /etc/firefox/policies/policies.json
+fi
+
+kiosk_log "configured: url=$url hostname=$h tz=$tz slot=$(kiosk_slot || echo none)"

@@ -1,0 +1,15 @@
+# Firmware for broad hardware support (installed from KERNEL_SUITE for newest blobs)
+firmware-linux-free
+firmware-linux-nonfree
+firmware-intel-graphics
+firmware-intel-misc
+firmware-intel-sound
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-brcm80211
+firmware-mediatek
+firmware-libertas
+firmware-sof-signed
+intel-microcode
+amd64-microcode

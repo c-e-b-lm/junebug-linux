@@ -1,0 +1,60 @@
+#!/bin/bash
+# Runs as user "kiosk" on tty1 (started by kiosk.service): starts the cage compositor
+# with the browser in kiosk mode. Environment comes from /run/kiosk/env.
+set -u
+# shellcheck disable=SC1091
+source /etc/kiosk/release
+
+: "${KIOSK_URL:=file:///usr/share/kiosk/welcome.html}"
+: "${KIOSK_LANG:=en}"
+: "${KIOSK_KEYMAP:=us}"
+: "${KIOSK_SCALE:=1}"
+: "${KIOSK_INCOGNITO:=0}"
+: "${KIOSK_FRESH_PROFILE:=1}"
+: "${KIOSK_ALLOW_ZOOM:=0}"
+: "${KIOSK_AUTOPLAY:=1}"
+: "${KIOSK_WAIT_NETWORK:=20}"
+: "${KIOSK_DEBUG:=0}"
+: "${KIOSK_BROWSER_ARGS:=}"
+
+export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=cage
+export LANG=C.UTF-8 LANGUAGE="$KIOSK_LANG"
+export XKB_DEFAULT_LAYOUT="${KIOSK_KEYMAP%%:*}"
+[[ "$KIOSK_KEYMAP" == *:* ]] && export XKB_DEFAULT_VARIANT="${KIOSK_KEYMAP#*:}"
+export WLR_RENDERER_ALLOW_SOFTWARE=1
+export MOZ_ENABLE_WAYLAND=1
+export CHROME_DEVEL_SANDBOX=
+
+PROFILE="$HOME/.config/kiosk-browser"
+[[ "$KIOSK_FRESH_PROFILE" == "1" ]] && rm -rf "$PROFILE"
+mkdir -p "$PROFILE"
+
+case "$KIOSK_URL" in
+    http://*|https://*) nm-online -q -t "$KIOSK_WAIT_NETWORK" || echo "kiosk-session: network not up after ${KIOSK_WAIT_NETWORK}s, starting anyway" >&2 ;;
+esac
+
+# shellcheck disable=SC2206
+extra=($KIOSK_BROWSER_ARGS)
+case "$BROWSER" in
+    chrome|chromium)
+        bin=google-chrome-stable; [[ "$BROWSER" == chromium ]] && bin=chromium
+        cmd=("$bin" --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-infobars
+             --disable-session-crashed-bubble --disable-component-update --check-for-update-interval=31536000
+             --password-store=basic --user-data-dir="$PROFILE" --disk-cache-size=104857600
+             --lang="$KIOSK_LANG" --force-device-scale-factor="$KIOSK_SCALE" --overscroll-history-navigation=0)
+        [[ "$KIOSK_ALLOW_ZOOM" == "1" ]] || cmd+=(--disable-pinch)
+        [[ "$KIOSK_INCOGNITO" == "1" ]] && cmd+=(--incognito)
+        [[ "$KIOSK_AUTOPLAY" == "1" ]] && cmd+=(--autoplay-policy=no-user-gesture-required)
+        cmd+=("${extra[@]}" "$KIOSK_URL")
+        ;;
+    firefox)
+        cmd=(firefox --kiosk --no-remote --profile "$PROFILE")
+        [[ "$KIOSK_INCOGNITO" == "1" ]] && cmd+=(--private-window)
+        cmd+=("${extra[@]}" "$KIOSK_URL")
+        ;;
+    *) echo "unknown BROWSER=$BROWSER" >&2; sleep 10; exit 1 ;;
+esac
+
+cage_opts=(-d)
+[[ "$KIOSK_DEBUG" == "1" ]] && cage_opts+=(-s)   # allow VT switching for debugging
+exec cage "${cage_opts[@]}" -- "${cmd[@]}"

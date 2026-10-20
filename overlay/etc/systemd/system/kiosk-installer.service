@@ -1,0 +1,18 @@
+[Unit]
+Description=Kiosk: installer (kiosk.installer=1 interactive, kiosk.installer=/dev/sdX unattended)
+After=systemd-user-sessions.service kiosk-config.service
+Conflicts=getty@tty1.service
+ConditionKernelCommandLine=kiosk.installer
+
+[Service]
+Type=oneshot
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+ExecStart=/usr/local/bin/kiosk-installer-tui
+
+[Install]
+WantedBy=graphical.target

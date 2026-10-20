@@ -1,0 +1,60 @@
+# Core system
+systemd
+systemd-sysv
+systemd-timesyncd
+systemd-resolved
+libpam-systemd
+dbus
+dbus-user-session
+udev
+kmod
+initramfs-tools
+busybox
+zstd
+live-boot
+live-boot-initramfs-tools
+tzdata
+procps
+psmisc
+util-linux
+pciutils
+usbutils
+nano
+ca-certificates
+curl
+jq
+minisign
+# Networking
+network-manager
+wpasupplicant
+iw
+wireless-regdb
+openssh-server
+# Display stack (Wayland kiosk compositor)
+cage
+libgl1-mesa-dri
+libegl1
+libgles2
+fonts-noto-core
+fonts-noto-color-emoji
+fonts-liberation
+# Audio
+pipewire
+pipewire-pulse
+wireplumber
+alsa-ucm-conf
+alsa-topology-conf
+# Installer / updater (bootloaders, partitioning)
+grub-common
+grub-pc-bin
+grub-efi-amd64-bin
+grub-efi-amd64-signed
+shim-signed
+efibootmgr
+gdisk
+dosfstools
+e2fsprogs
+whiptail
+# Build-only (purged after boot assets are extracted)
+isolinux
+syslinux-common

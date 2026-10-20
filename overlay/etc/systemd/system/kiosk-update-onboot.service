@@ -1,0 +1,8 @@
+[Unit]
+Description=Kiosk: OS update check after boot (downloads only, never reboots)
+After=network-online.target kiosk-config.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kiosk-update --no-reboot

@@ -1,0 +1,16 @@
+#!/bin/bash
+# Confirms the running slot: clears the trial flag so GRUB keeps booting it.
+set -euo pipefail
+source /usr/share/kiosk/lib.sh
+export KIOSK_TAG=kiosk-mark-good
+slot="$(kiosk_slot)" || exit 0
+if ! systemctl -q is-active kiosk.service || ! kiosk_browser_running; then
+    kiosk_log "browser session not healthy; NOT confirming slot $slot"
+    exit 1
+fi
+env="$(kiosk_grubenv)" || kiosk_die "grubenv not found"
+if grep -q '^trial=1' "$env"; then
+    grub-editenv "$env" set trial=0 tried=0
+    sync
+    kiosk_log "slot $slot ($(cat /etc/kiosk/version)) confirmed as good"
+fi

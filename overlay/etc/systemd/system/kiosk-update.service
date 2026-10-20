@@ -1,0 +1,8 @@
+[Unit]
+Description=Kiosk: nightly OS update check (may reboot, see KIOSK_UPDATE_REBOOT)
+After=network-online.target kiosk-config.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kiosk-update

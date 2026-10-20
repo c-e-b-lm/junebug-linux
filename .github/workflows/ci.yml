@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install linters
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends shellcheck jq
+          curl -sSL "$(curl -sSL https://api.github.com/repos/rhysd/actionlint/releases/latest | jq -r '.assets[] | select(.name | test("linux_amd64.tar.gz$")) | .browser_download_url')" | sudo tar -xz -C /usr/local/bin actionlint
+      - run: make lint
+
+  build:
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
+      - name: Install build dependencies
+        run: make deps
+      - name: Build rootfs + ISO
+        run: sudo -E make iso
+      - name: Manifest (unsigned on CI builds)
+        run: make manifest
+      - name: Boot tests (QEMU, BIOS + UEFI + install)
+        run: sudo -E make test-boot
+      - name: Upload QEMU logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-test-logs
+          path: out/test/*.log
+          if-no-files-found: ignore
+      - name: Upload image
+        uses: actions/upload-artifact@v4
+        with:
+          name: junebug-ci
+          path: |
+            out/release/*.iso
+            out/release/manifest.json
+            out/release/SHA256SUMS
+            out/release/release.env
+          retention-days: 7
+          compression-level: 0

@@ -1,0 +1,22 @@
+#!/bin/bash
+# Show version, slot and health information.
+set -uo pipefail
+source /usr/share/kiosk/lib.sh
+kiosk_load_config
+echo "== $DIST_NAME $VERSION ($CHANNEL)"
+echo "kernel:   $(uname -r)"
+echo "browser:  $BROWSER $BROWSER_VERSION"
+echo "built:    $BUILD_DATE"
+echo "url:      ${KIOSK_URL:-}"
+echo "session:  $(systemctl is-active kiosk.service) (browser $(kiosk_browser_running && echo running || echo not running))"
+echo "network:  $(nmcli -t -f STATE general 2>/dev/null || echo unknown)"
+if slot="$(kiosk_slot)"; then
+    echo "slot:     $slot (installed system)"
+    if env="$(kiosk_grubenv 2>/dev/null)"; then echo "grubenv:  $(grep -v '^#' "$env" | tr '\n' ' ')"; fi
+    if data="$(kiosk_data_mount 2>/dev/null)"; then
+        for s in a b; do echo "slot $s:   $(cat "$data/live/$s/version" 2>/dev/null || echo '(empty)')"; done
+    fi
+    echo "updates:  ${UPDATE_URL:-} (enabled=${KIOSK_UPDATE:-1}, reboot=${KIOSK_UPDATE_REBOOT:-1})"
+else
+    echo "slot:     none (live ISO/USB; install to disk for updates)"
+fi

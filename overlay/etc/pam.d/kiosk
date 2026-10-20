@@ -1,0 +1,7 @@
+# PAM stack for the kiosk session (systemd PAMName=kiosk). No authentication: the session is
+# started by systemd for the fixed, unprivileged user "kiosk". pam_systemd registers a logind
+# seat session so the compositor gets DRM/input access without root.
+auth      required   pam_permit.so
+account   required   pam_permit.so
+session   required   pam_unix.so
+-session  optional   pam_systemd.so

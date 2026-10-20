@@ -1,0 +1,86 @@
+#!/bin/bash
+# Install Junebug Linux onto a disk (USB stick, SSD, eMMC). Wipes the disk!
+# Usage: kiosk-install [--yes] [--after reboot|poweroff|none] /dev/sdX
+set -euo pipefail
+source /usr/share/kiosk/lib.sh
+export KIOSK_TAG=kiosk-install
+# shellcheck disable=SC1091
+source /etc/kiosk/release
+YES=0; AFTER=none; DISK=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --yes) YES=1 ;;
+        --after) AFTER="$2"; shift ;;
+        -*) kiosk_die "unknown option $1" ;;
+        *) DISK="$1" ;;
+    esac; shift
+done
+[[ -b "$DISK" ]] || kiosk_die "usage: kiosk-install [--yes] [--after reboot|poweroff|none] /dev/DISK"
+[[ "$(lsblk -dno TYPE "$DISK")" == "disk" ]] || kiosk_die "$DISK is not a whole disk"
+
+# Source files: the running medium (ISO: live/, installed: live/<slot>)
+SRC=/run/live/medium/live
+if slot="$(kiosk_slot)"; then SRC="$SRC/$slot"; fi
+for f in vmlinuz initrd.img filesystem.squashfs; do [[ -s "$SRC/$f" ]] || kiosk_die "source file missing: $SRC/$f"; done
+mdev="$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)"
+if [[ -n "$mdev" ]]; then
+    mdisk="/dev/$(lsblk -no PKNAME "$mdev" 2>/dev/null | head -1)"
+    [[ "$mdisk" == "/dev/" ]] && mdisk="$mdev"
+    [[ "$(readlink -f "$mdisk")" != "$(readlink -f "$DISK")" ]] || kiosk_die "$DISK is the medium we are running from"
+fi
+if lsblk -nro MOUNTPOINT "$DISK" | grep -q .; then kiosk_die "$DISK has mounted partitions"; fi
+
+echo "Target: $DISK ($(lsblk -dno SIZE,MODEL "$DISK" | tr -s ' '))"
+if [[ $YES == 0 ]]; then
+    read -r -p "ALL DATA ON $DISK WILL BE ERASED. Type YES to continue: " ans
+    [[ "$ans" == "YES" ]] || kiosk_die "aborted"
+fi
+
+ESP_MNT="$(mktemp -d /mnt/kiosk-esp.XXXX)"; DATA_MNT="$(mktemp -d /mnt/kiosk-data.XXXX)"
+cleanup() { umount "$ESP_MNT" 2>/dev/null || true; umount "$DATA_MNT" 2>/dev/null || true; rmdir "$ESP_MNT" "$DATA_MNT" 2>/dev/null || true; }
+trap cleanup EXIT
+
+kiosk_log "partitioning $DISK (GPT: BIOS boot, ESP KIOSK_EFI, data KIOSK_DATA)"
+wipefs -af "$DISK" >/dev/null
+sgdisk --zap-all "$DISK" >/dev/null
+sgdisk -n1:0:+1M   -t1:ef02 -c1:BIOSBOOT \
+       -n2:0:+512M -t2:ef00 -c2:KIOSK_EFI \
+       -n3:0:0     -t3:8300 -c3:KIOSK_DATA "$DISK" >/dev/null
+blockdev --rereadpt "$DISK" 2>/dev/null || true; udevadm settle
+part() { lsblk -nrpo PATH,PARTN "$DISK" | awk -v n="$1" '$2==n{print $1}'; }
+P_ESP="$(part 2)"; P_DATA="$(part 3)"
+[[ -b "$P_ESP" && -b "$P_DATA" ]] || kiosk_die "partitions not found after partitioning"
+mkfs.vfat -F 32 -n KIOSK_EFI "$P_ESP" >/dev/null
+mkfs.ext4 -q -F -L KIOSK_DATA -E lazy_itable_init=0,lazy_journal_init=0 "$P_DATA"
+mount "$P_ESP" "$ESP_MNT"; mount "$P_DATA" "$DATA_MNT"
+
+kiosk_log "copying system to slot a"
+mkdir -p "$DATA_MNT/live/a" "$DATA_MNT/live/b"
+cp "$SRC/vmlinuz" "$SRC/initrd.img" "$SRC/filesystem.squashfs" "$DATA_MNT/live/a/"
+echo "$VERSION" > "$DATA_MNT/live/a/version"
+
+kiosk_log "installing boot loaders"
+mkdir -p "$ESP_MNT/EFI/boot" "$ESP_MNT/boot/grub" "$ESP_MNT/.disk"
+cp /usr/lib/shim/shimx64.efi.signed "$ESP_MNT/EFI/boot/bootx64.efi"
+cp /usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed "$ESP_MNT/EFI/boot/grubx64.efi"
+echo "$DIST_NAME $VERSION (installed)" > "$ESP_MNT/.disk/info"
+sed -e "s|@CMDLINE@|$(tr -d '\n' < /usr/share/kiosk/cmdline.txt)|g" -e "s|@DIST_NAME@|$DIST_NAME|g" \
+    /usr/share/kiosk/grub-installed.cfg > "$ESP_MNT/boot/grub/grub.cfg"
+grub-editenv "$ESP_MNT/boot/grub/grubenv" create
+grub-editenv "$ESP_MNT/boot/grub/grubenv" set slot=a trial=0 tried=0
+grub-install --target=i386-pc --boot-directory="$ESP_MNT/boot" --recheck "$DISK" >/dev/null 2>&1 \
+    || kiosk_log "warning: legacy BIOS boot loader could not be installed (UEFI boot still works)"
+
+# Configuration: carry over kiosk.conf + network/ from the running medium (or ship the template)
+if [[ -f /run/live/medium/kiosk.conf ]]; then cp /run/live/medium/kiosk.conf "$ESP_MNT/kiosk.conf"
+elif [[ -f /run/kiosk/esp/kiosk.conf ]]; then cp /run/kiosk/esp/kiosk.conf "$ESP_MNT/kiosk.conf"
+else cp /etc/kiosk/kiosk.conf "$ESP_MNT/kiosk.conf"; fi
+for d in /run/live/medium/network /run/kiosk/esp/network; do [[ -d "$d" ]] && cp -r "$d" "$ESP_MNT/network"; done
+
+if [[ -d /sys/firmware/efi ]] && command -v efibootmgr >/dev/null; then
+    efibootmgr --create --disk "$DISK" --part 2 --label "$DIST_NAME" --loader '\EFI\boot\bootx64.efi' >/dev/null 2>&1 \
+        || kiosk_log "note: could not add UEFI boot entry (removable-media path /EFI/boot is used anyway)"
+fi
+sync; cleanup; trap - EXIT
+kiosk_log "KIOSK-INSTALL-OK $DISK ($VERSION)"
+case "$AFTER" in reboot) systemctl reboot ;; poweroff) systemctl poweroff ;; esac

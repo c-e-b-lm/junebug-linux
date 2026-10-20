@@ -1,0 +1,15 @@
+#!/bin/bash
+# Switch the boot slot back to the other (previous) version. Usage: kiosk-rollback [--reboot]
+set -euo pipefail
+source /usr/share/kiosk/lib.sh
+export KIOSK_TAG=kiosk-rollback
+slot="$(kiosk_slot)" || kiosk_die "not an installed system"
+other="$(kiosk_other_slot "$slot")"
+data="$(kiosk_data_mount)" || kiosk_die "KIOSK_DATA not found"
+[[ -s "$data/live/$other/filesystem.squashfs" ]] || kiosk_die "slot $other is empty, nothing to roll back to"
+env="$(kiosk_grubenv)" || kiosk_die "grubenv not found"
+grub-editenv "$env" set slot="$other" trial=0 tried=0
+sync
+kiosk_log "next boot: slot $other ($(cat "$data/live/$other/version" 2>/dev/null || echo unknown))"
+[[ "${1:-}" == "--reboot" ]] && systemctl reboot
+exit 0

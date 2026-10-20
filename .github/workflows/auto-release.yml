@@ -1,0 +1,50 @@
+name: Auto release
+
+# Weekly: if Google Chrome (or the backports kernel) has a newer version than the last
+# published release, create a CalVer tag and publish a new release.
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Release even when nothing changed upstream
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+      tag: ${{ steps.check.outputs.tag }}
+      reason: ${{ steps.check.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/check-upstream.sh | tee -a "$GITHUB_OUTPUT"
+          if [ "${{ inputs.force }}" = "true" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Create tag
+        if: steps.check.outputs.changed == 'true' || inputs.force
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.check.outputs.tag }}" -m "Automatic release: ${{ steps.check.outputs.reason }}"
+          git push origin "${{ steps.check.outputs.tag }}"
+
+  release:
+    needs: check
+    if: needs.check.outputs.changed == 'true' || inputs.force
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.check.outputs.tag }}
+    secrets:
+      MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}

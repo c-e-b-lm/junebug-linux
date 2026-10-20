@@ -1,0 +1,29 @@
+#!/bin/bash
+# CI self test: waits for the browser session, reports on the serial port, powers off.
+set -uo pipefail
+source /usr/share/kiosk/lib.sh
+# shellcheck disable=SC1091
+source /etc/kiosk/release
+out() { printf '%s\n' "$*" | tee /dev/ttyS0 /dev/console 2>/dev/null >/dev/null; logger -t kiosk-selftest -- "$*"; }
+slot="$(kiosk_slot || echo none)"
+deadline=$((SECONDS + 240)); ok=0
+while (( SECONDS < deadline )); do
+    if systemctl -q is-active kiosk.service && pgrep -u kiosk -x cage >/dev/null && kiosk_browser_running; then
+        ok=1; break
+    fi
+    sleep 3
+done
+if (( ok )); then
+    sleep 10   # let the browser settle; make sure it did not crash right away
+    if kiosk_browser_running; then
+        out "KIOSK-SELFTEST-OK slot=$slot version=$VERSION kernel=$(uname -r) browser=$BROWSER/$BROWSER_VERSION"
+    else
+        ok=0
+    fi
+fi
+if (( ! ok )); then
+    out "KIOSK-SELFTEST-FAIL slot=$slot version=$VERSION"
+    { systemctl status kiosk.service --no-pager -l; journalctl -b --no-pager -n 120; } 2>&1 | tee /dev/ttyS0 >/dev/null 2>&1
+fi
+sleep 2
+systemctl poweroff

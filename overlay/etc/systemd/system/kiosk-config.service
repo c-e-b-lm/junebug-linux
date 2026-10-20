@@ -1,0 +1,14 @@
+[Unit]
+Description=Kiosk: merge configuration (defaults, boot medium, ESP, KIOSKCFG stick, credentials, cmdline)
+DefaultDependencies=no
+After=local-fs.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+Before=NetworkManager.service kiosk.service ssh.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/kiosk-config
+
+[Install]
+WantedBy=sysinit.target

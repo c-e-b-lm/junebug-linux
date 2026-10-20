@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Junebug Linux</title>
+<style>
+ body{margin:0;font:18px/1.5 system-ui,sans-serif;background:#111;color:#eee;display:flex;align-items:center;justify-content:center;min-height:100vh}
+ main{max-width:720px;padding:2rem} h1{font-weight:600} code{background:#333;padding:.1em .4em;border-radius:4px}
+ p.small{color:#999;font-size:.85em}
+</style></head><body><main>
+<h1>Junebug Linux is running.</h1>
+<p>No start URL is configured yet. Put a file named <code>kiosk.conf</code> with a line
+<code>KIOSK_URL=https://example.org</code> next to the <code>live</code> folder on the boot medium
+(ISO root, or the <code>KIOSK_EFI</code> partition of an installed system) and reboot.</p>
+<p>Alternatives: a USB stick labelled <code>KIOSKCFG</code> containing <code>kiosk.conf</code>,
+or the kernel parameter <code>kiosk.url=https://example.org</code> (press <kbd>e</kbd> in the boot menu).</p>
+<p class="small">Install to disk for automatic updates: choose "Install" in the boot menu.</p>
+</main></body></html>

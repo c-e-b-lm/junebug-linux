@@ -1,0 +1,4 @@
+source-path=SCRIPTDIR
+source-path=scripts
+# runtime-only files (/tmp/build.env, /etc/kiosk/release, /run/kiosk/config) and build.conf resolved at runtime
+disable=SC1091

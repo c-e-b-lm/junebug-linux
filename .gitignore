@@ -1,0 +1,4 @@
+out/
+*.iso
+*.squashfs
+*.key

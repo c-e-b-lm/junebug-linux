@@ -1,0 +1,12 @@
+[Unit]
+Description=Kiosk: confirm the running slot after a successful start (cancels trial-boot rollback)
+After=kiosk.service
+ConditionKernelCommandLine=kiosk.slot
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 90
+ExecStart=/usr/local/bin/kiosk-mark-good
+
+[Install]
+WantedBy=graphical.target

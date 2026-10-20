@@ -1,0 +1,41 @@
+#!/bin/bash
+# Text installer on tty1. kiosk.installer=1 -> interactive, kiosk.installer=/dev/sdX -> unattended.
+set -uo pipefail
+source /usr/share/kiosk/lib.sh
+export KIOSK_TAG=kiosk-installer
+# shellcheck disable=SC1091
+source /etc/kiosk/release
+target="$(kiosk_cmdline_get kiosk.installer || echo 1)"
+after="$(kiosk_cmdline_get kiosk.installer.after || echo reboot)"
+clear 2>/dev/null || true
+
+if [[ "$target" != "1" ]]; then
+    echo "Unattended install to $target ..."
+    if ! kiosk-install --yes --after "$after" "$target"; then
+        echo "KIOSK-INSTALL-FAILED $target" | tee /dev/ttyS0 2>/dev/null
+        sleep 30; systemctl poweroff
+    fi
+    exit 0
+fi
+
+mdev="$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)"
+mdisk="$( [[ -n "$mdev" ]] && lsblk -no PKNAME "$mdev" | head -1 || true)"
+mapfile -t disks < <(lsblk -dnro PATH,SIZE,MODEL,TYPE | awk -v m="$mdisk" '$NF=="disk" && $1 !~ /(loop|zram|sr)/ && $1 != "/dev/"m {print}')
+if [[ ${#disks[@]} -eq 0 ]]; then
+    whiptail --title "$DIST_NAME installer" --msgbox "No target disk found. Reboot." 8 50; systemctl reboot; exit 0
+fi
+menu=()
+for d in "${disks[@]}"; do
+    path="${d%% *}"; rest="${d#* }"; rest="${rest% disk}"
+    menu+=("$path" "$rest")
+done
+disk="$(whiptail --title "$DIST_NAME $VERSION installer" --menu "Select the target disk. It will be ERASED completely." 20 70 10 "${menu[@]}" 3>&1 1>&2 2>&3)" || { systemctl reboot; exit 0; }
+whiptail --title "Confirm" --yesno "Erase $disk and install $DIST_NAME?\n\n$(lsblk -dno SIZE,MODEL "$disk")" 12 60 || { systemctl reboot; exit 0; }
+clear
+if kiosk-install --yes --after none "$disk" 2>&1 | tee /tmp/install.log; then
+    whiptail --title "Done" --msgbox "Installed to $disk.\n\nRemove the installation medium and press OK to reboot.\nEdit kiosk.conf on the KIOSK_EFI partition to set the URL." 12 60
+    systemctl reboot
+else
+    whiptail --title "Failed" --textbox /tmp/install.log 25 78
+    systemctl reboot
+fi

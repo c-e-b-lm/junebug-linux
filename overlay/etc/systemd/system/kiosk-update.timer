@@ -1,0 +1,10 @@
+[Unit]
+Description=Kiosk: nightly OS update check
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=45min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

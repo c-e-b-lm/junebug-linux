@@ -1,0 +1,68 @@
+#!/bin/bash
+# OS updater for installed systems: downloads the newest signed release into the inactive
+# slot and arms a trial boot. Usage: kiosk-update [--no-reboot] [--force] [--check]
+set -euo pipefail
+source /usr/share/kiosk/lib.sh
+export KIOSK_TAG=kiosk-update
+kiosk_load_config
+REBOOT=1; FORCE=0; CHECK=0
+for a in "$@"; do case "$a" in --no-reboot) REBOOT=0;; --force) FORCE=1;; --check) CHECK=1;; *) kiosk_die "unknown option $a";; esac; done
+
+[[ "${KIOSK_UPDATE:-1}" == "1" || $FORCE == 1 ]] || { kiosk_log "updates disabled (KIOSK_UPDATE=0)"; exit 0; }
+slot="$(kiosk_slot)" || { kiosk_log "not an installed system (ISO/USB mode): nothing to update"; exit 0; }
+other="$(kiosk_other_slot "$slot")"
+url="${UPDATE_URL%/}"
+WORK="$KIOSK_RUN/update"; mkdir -p "$WORK"
+
+# --- manifest ------------------------------------------------------------------------
+curl -fsSL --retry 3 --max-time 60 -o "$WORK/manifest.json" "$url/manifest.json" || kiosk_die "cannot download manifest from $url"
+curl -fsSL --retry 3 --max-time 60 -o "$WORK/manifest.json.minisig" "$url/manifest.json.minisig" || kiosk_die "manifest signature missing"
+minisign -V -q -p "$KIOSK_PUBKEY" -m "$WORK/manifest.json" -x "$WORK/manifest.json.minisig" || kiosk_die "manifest signature INVALID"
+new="$(jq -r .version "$WORK/manifest.json")"
+[[ "$(jq -r .dist "$WORK/manifest.json")" == "$DIST_ID" ]] || kiosk_die "manifest is for a different distribution"
+[[ "$(jq -r .channel "$WORK/manifest.json")" == "${UPDATE_CHANNEL:-$CHANNEL}" ]] || kiosk_die "manifest channel mismatch"
+cur="$(cat /etc/kiosk/version)"
+newest="$(printf '%s\n%s\n' "$cur" "$new" | sort -V | tail -1)"
+if [[ "$new" == "$cur" || "$newest" != "$new" ]] && [[ $FORCE == 0 ]]; then
+    kiosk_log "up to date ($cur, available: $new)"; exit 0
+fi
+kiosk_log "update available: $cur -> $new ($(jq -r '.browser + " " + .browser_version + ", kernel " + .kernel' "$WORK/manifest.json"))"
+[[ $CHECK == 1 ]] && exit 0
+
+# --- target slot ---------------------------------------------------------------------
+data="$(kiosk_data_mount)" || kiosk_die "KIOSK_DATA partition not found"
+esp="$(kiosk_esp_mount)" || kiosk_die "KIOSK_EFI partition not found"
+kiosk_data_rw "$data"
+trap 'sync; kiosk_data_ro "$data"' EXIT
+target="$data/live/$other"; mkdir -p "$target"
+# Discard partial downloads of a different version
+if [[ "$(cat "$target/.staging" 2>/dev/null)" != "$new" ]]; then rm -f "$target"/*.part; echo "$new" > "$target/.staging"; fi
+
+need="$(jq '[.files[].size] | add' "$WORK/manifest.json")"
+have="$(du -sb "$target" | cut -f1)"
+avail="$(df --output=avail -B1 "$data" | tail -1)"
+(( avail + have > need + 64*1024*1024 )) || kiosk_die "not enough space in slot $other (need $need, free $avail)"
+
+while IFS=$'\t' read -r name sha size; do
+    [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || kiosk_die "refusing suspicious file name in manifest: $name"
+    if [[ -f "$target/$name" && "$(sha256sum "$target/$name" | cut -d' ' -f1)" == "$sha" ]]; then
+        kiosk_log "$name already present"; continue
+    fi
+    kiosk_log "downloading $name ($((size / 1024 / 1024)) MB)"
+    curl -fL --retry 5 --retry-all-errors --retry-delay 10 -C - -sS -o "$target/$name.part" "$url/$name" \
+        || kiosk_die "download of $name failed"
+    [[ "$(sha256sum "$target/$name.part" | cut -d' ' -f1)" == "$sha" ]] || { rm -f "$target/$name.part"; kiosk_die "checksum mismatch for $name"; }
+    mv -f "$target/$name.part" "$target/$name"
+done < <(jq -r '.files[] | [.name, .sha256, .size] | @tsv' "$WORK/manifest.json")
+echo "$new" > "$target/version"; rm -f "$target/.staging"
+sync
+
+grub-editenv "$esp/boot/grub/grubenv" set slot="$other" trial=1 tried=0
+sync
+kiosk_log "update $cur -> $new staged in slot $other; trial boot armed"
+if [[ $REBOOT == 1 && "${KIOSK_UPDATE_REBOOT:-1}" == "1" ]]; then
+    kiosk_log "rebooting into new version"
+    systemctl reboot
+else
+    kiosk_log "reboot pending (next scheduled reboot or manual)"
+fi
