@@ -1,0 +1,49 @@
+# CodeRabbit configuration (https://docs.coderabbit.ai/reference/configuration)
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: de-DE
+tone_instructions: >-
+  Sachlich und knapp. Fokus auf Fehler, die ein Image nicht bootbar machen, Updates auf
+  Geräten brechen oder die Signaturprüfung schwächen. Keine Stilkommentare ohne Nutzen.
+reviews:
+  profile: assertive
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: [main]
+  path_instructions:
+    - path: "scripts/**"
+      instructions: >-
+        Build-Skripte (laufen als root auf dem CI-Runner). Prüfe set -euo pipefail, Quoting,
+        Idempotenz, und dass keine Host-Pfade ins Image gelangen.
+    - path: "overlay/usr/local/bin/**"
+      instructions: >-
+        Laufen auf dem Kiosk-Gerät (read-only Squashfs, Bash, kein Python). Besonders kritisch:
+        kiosk-update (Signatur- und Hash-Prüfung, Slot-Logik, Downgrade-Schutz) und kiosk-install
+        (partitioniert Datenträger, darf nie das laufende Medium treffen).
+    - path: "boot/**"
+      instructions: >-
+        GRUB/isolinux-Konfigurationen. Trial-Boot/Rollback-Logik in grub-installed.cfg muss mit
+        kiosk-update und kiosk-mark-good konsistent bleiben.
+    - path: ".github/workflows/**"
+      instructions: >-
+        Minimale permissions, keine Secrets in Logs, Release-Assets vollständig (ISO, squashfs,
+        vmlinuz, initrd.img, manifest.json, manifest.json.minisig, SHA256SUMS).
+    - path: "overlay/etc/opt/chrome/policies/**"
+      instructions: Chrome Enterprise Policies; nur gültige, nicht veraltete Policy-Namen.
+  tools:
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: false
+    gitleaks:
+      enabled: true
+chat:
+  auto_reply: true
