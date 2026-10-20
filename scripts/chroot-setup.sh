@@ -19,9 +19,11 @@ apt_install -t "$KERNEL_SUITE" "linux-image-$ARCH" $FW_PKGS
 echo ">> browser: $BROWSER"
 case "$BROWSER" in
     chrome)
-        curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
-            | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
-        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
+        # ASCII-armored key straight into a .asc keyring: apt accepts it, no gnupg needed in the image.
+        install -d -m 0755 /usr/share/keyrings
+        curl -fsSL https://dl.google.com/linux/linux_signing_key.pub -o /usr/share/keyrings/google-chrome.asc
+        grep -q 'BEGIN PGP PUBLIC KEY BLOCK' /usr/share/keyrings/google-chrome.asc
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.asc] https://dl.google.com/linux/chrome/deb/ stable main" \
             > /etc/apt/sources.list.d/google-chrome.list
         apt-get update -q
         apt_install google-chrome-stable
