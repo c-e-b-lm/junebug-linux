@@ -1,74 +1,63 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Junebug Linux logo">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Junebug Linux logo: a June beetle whose wing cases form a globe">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1f2a3a"/>
-      <stop offset="1" stop-color="#0f1620"/>
-    </linearGradient>
-    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f3a63b"/>
-      <stop offset="1" stop-color="#c8651a"/>
-    </linearGradient>
-    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity=".45"/>
-      <stop offset=".6" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
+    <radialGradient id="shell" cx="0.34" cy="0.26" r="0.9">
+      <stop offset="0" stop-color="#f6a453"/>
+      <stop offset="0.5" stop-color="#c8662b"/>
+      <stop offset="1" stop-color="#7a3416"/>
+    </radialGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.42" r="0.62">
+      <stop offset="0" stop-color="#fff4cc"/>
+      <stop offset="1" stop-color="#ffd772"/>
+    </radialGradient>
+    <clipPath id="globe"><circle cx="128" cy="150" r="62"/></clipPath>
   </defs>
-
-  <!-- browser window -->
-  <rect x="16" y="16" width="224" height="224" rx="36" fill="url(#bg)"/>
-  <rect x="16" y="16" width="224" height="44" rx="36" fill="#2b3a4e"/>
-  <rect x="16" y="40" width="224" height="20" fill="#2b3a4e"/>
-  <circle cx="44" cy="38" r="6" fill="#ff5f57"/>
-  <circle cx="64" cy="38" r="6" fill="#febc2e"/>
-  <circle cx="84" cy="38" r="6" fill="#28c840"/>
-  <rect x="104" y="30" width="116" height="16" rx="8" fill="#1a2533"/>
-
-  <!-- beetle -->
-  <g transform="translate(128 152)">
-    <!-- legs -->
-    <g stroke="#7a4b22" stroke-width="7" stroke-linecap="round" fill="none">
-      <path d="M-34 -22 L-58 -40 M-58 -40 L-66 -56"/>
-      <path d="M 34 -22 L 58 -40 M 58 -40 L 66 -56"/>
-      <path d="M-40 2 L-66 4 M-66 4 L-78 -8"/>
-      <path d="M 40 2 L 66 4 M 66 4 L 78 -8"/>
-      <path d="M-34 26 L-56 46 M-56 46 L-66 62"/>
-      <path d="M 34 26 L 56 46 M 56 46 L 66 62"/>
+  <circle cx="128" cy="128" r="124" fill="url(#sun)"/>
+  <g transform="rotate(-9 128 140)">
+    <g stroke="#3a2216" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M94 110 L68 98 L58 76"/>
+      <path d="M162 110 L188 98 L198 76"/>
+      <path d="M72 144 L42 146 L30 134"/>
+      <path d="M184 144 L214 146 L226 134"/>
+      <path d="M86 190 L66 210 L68 230"/>
+      <path d="M170 190 L190 210 L188 230"/>
     </g>
-    <!-- antennae (fan-shaped, Maikäfer) -->
-    <g stroke="#7a4b22" stroke-width="5" stroke-linecap="round" fill="none">
-      <path d="M-14 -50 L-26 -70"/>
-      <path d="M 14 -50 L 26 -70"/>
+    <path d="M118 204 L128 226 L138 204 Z" fill="#3a2216" stroke="#3a2216" stroke-width="4" stroke-linejoin="round"/>
+    <g fill="#fffaf0" stroke="#3a2216" stroke-width="2.2" stroke-linejoin="round">
+      <path d="M54 158 L70 148 L70 168 Z"/>
+      <path d="M58 182 L74 172 L74 192 Z"/>
+      <path d="M202 158 L186 148 L186 168 Z"/>
+      <path d="M198 182 L182 172 L182 192 Z"/>
     </g>
-    <g fill="#7a4b22">
-      <path d="M-26 -70 l-14 -14 l6 -2 l12 10 z"/>
-      <path d="M-26 -70 l-10 -18 l6 0 l8 14 z"/>
-      <path d="M-26 -70 l-2 -20 l6 2 l0 16 z"/>
-      <path d="M 26 -70 l14 -14 l-6 -2 l-12 10 z"/>
-      <path d="M 26 -70 l10 -18 l-6 0 l-8 14 z"/>
-      <path d="M 26 -70 l2 -20 l-6 2 l0 16 z"/>
+    <g stroke="#3a2216" stroke-width="5" stroke-linecap="round" fill="none">
+      <path d="M119 58 Q111 46 102 39"/>
+      <path d="M137 58 Q145 46 154 39"/>
     </g>
-    <!-- head + thorax -->
-    <circle cx="0" cy="-46" r="18" fill="#3d2612" stroke="#7a4b22" stroke-width="2"/>
-    <circle cx="-7" cy="-50" r="4" fill="#ffffff"/>
-    <circle cx="7" cy="-50" r="4" fill="#ffffff"/>
-    <circle cx="-7" cy="-50" r="2" fill="#0f1620"/>
-    <circle cx="7" cy="-50" r="2" fill="#0f1620"/>
-    <ellipse cx="0" cy="-24" rx="30" ry="16" fill="#3d2612"/>
-    <!-- elytra -->
-    <path d="M-44 -12 C-48 30 -28 64 -4 66 L-4 -14 Z" fill="url(#shell)"/>
-    <path d="M 44 -12 C 48 30 28 64 4 66 L 4 -14 Z" fill="url(#shell)"/>
-    <path d="M-44 -12 C-48 30 -28 64 -4 66 L-4 -14 Z" fill="url(#shine)"/>
-    <!-- wing texture -->
-    <g stroke="#9a4a10" stroke-width="2.5" stroke-linecap="round" opacity=".55">
-      <path d="M-30 -6 C-33 20 -24 44 -12 56"/>
-      <path d="M-18 -8 C-20 20 -14 42 -8 58"/>
-      <path d="M 30 -6 C 33 20 24 44 12 56"/>
-      <path d="M 18 -8 C 20 20 14 42 8 58"/>
+    <g fill="#3a2216">
+      <ellipse cx="92.2" cy="36.0" rx="9.5" ry="3.6" transform="rotate(-167.0 92.2 36.0)"/>
+      <ellipse cx="94.0" cy="32.3" rx="9.5" ry="3.6" transform="rotate(-141.0 94.0 32.3)"/>
+      <ellipse cx="97.2" cy="29.8" rx="9.5" ry="3.6" transform="rotate(-115.0 97.2 29.8)"/>
+      <ellipse cx="101.2" cy="29.0" rx="9.5" ry="3.6" transform="rotate(-89.0 101.2 29.0)"/>
+      <ellipse cx="154.8" cy="29.0" rx="9.5" ry="3.6" transform="rotate(-91.0 154.8 29.0)"/>
+      <ellipse cx="158.8" cy="29.8" rx="9.5" ry="3.6" transform="rotate(-65.0 158.8 29.8)"/>
+      <ellipse cx="162.0" cy="32.3" rx="9.5" ry="3.6" transform="rotate(-39.0 162.0 32.3)"/>
+      <ellipse cx="163.8" cy="36.0" rx="9.5" ry="3.6" transform="rotate(-13.0 163.8 36.0)"/>
     </g>
-    <!-- white side flecks (Maikäfer triangles) -->
-    <g fill="#fff3e0" opacity=".9">
-      <path d="M-44 -4 l6 10 l-6 2 z"/><path d="M-45 12 l6 10 l-6 2 z"/><path d="M-42 28 l6 10 l-6 2 z"/>
-      <path d="M 44 -4 l-6 10 l6 2 z"/><path d="M 45 12 l-6 10 l6 2 z"/><path d="M 42 28 l-6 10 l6 2 z"/>
+    <circle cx="128" cy="68" r="18" fill="#3a2216"/>
+    <circle cx="120" cy="64.5" r="4.6" fill="#fffaf0"/>
+    <circle cx="136" cy="64.5" r="4.6" fill="#fffaf0"/>
+    <circle cx="121" cy="65.5" r="2.1" fill="#3a2216"/>
+    <circle cx="137" cy="65.5" r="2.1" fill="#3a2216"/>
+    <path d="M90 98 Q90 82 128 82 Q166 82 166 98 Q166 110 128 110 Q90 110 90 98 Z" fill="#2c1910"/>
+    <circle cx="128" cy="150" r="62" fill="url(#shell)"/>
+    <g clip-path="url(#globe)" stroke="#ffe3b3" stroke-opacity="0.55" stroke-width="2.6" fill="none">
+      <ellipse cx="128" cy="150" rx="31" ry="62"/>
+      <ellipse cx="128" cy="150" rx="52" ry="62"/>
+      <path d="M64 143 Q128 162 192 143"/>
+      <path d="M74 110 Q128 125 182 110"/>
+      <path d="M72 182 Q128 198 184 182"/>
     </g>
+    <path d="M128 90 L128 211" stroke="#5a250c" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="128" cy="150" r="62" fill="none" stroke="#5a250c" stroke-width="3"/>
+    <ellipse cx="103" cy="117" rx="17" ry="8" fill="#ffffff" fill-opacity="0.32" transform="rotate(-32 103 117)"/>
   </g>
 </svg>
