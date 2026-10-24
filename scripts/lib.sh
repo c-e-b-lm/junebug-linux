@@ -14,7 +14,15 @@ load_build_conf() {
     source "$REPO_DIR/build.conf"
     VERSION="${VERSION:-$(detect_version)}"
     IMAGE_NAME="${DIST_ID}-${VERSION}-${ARCH}"
-    export DIST_NAME DIST_ID SUITE KERNEL_SUITE ARCH BROWSER FIRMWARE_NVIDIA MIRROR \
+    # Non-PC platforms get their own manifest and prefixed release files, so one GitHub
+    # release can carry every platform without name clashes.
+    if [[ "$PLATFORM" == pc ]]; then
+        RELEASE_PREFIX=""; MANIFEST_NAME=manifest.json
+    else
+        IMAGE_NAME="$IMAGE_NAME-$PLATFORM"
+        RELEASE_PREFIX="$ARCH-$PLATFORM-"; MANIFEST_NAME="manifest-$ARCH-$PLATFORM.json"
+    fi
+    export DIST_NAME DIST_ID SUITE KERNEL_SUITE PLATFORM ARCH RELEASE_PREFIX MANIFEST_NAME BROWSER FIRMWARE_NVIDIA MIRROR \
         SECURITY_MIRROR SQUASHFS_COMP UPDATE_URL UPDATE_CHANNEL ISO_LABEL VERSION IMAGE_NAME
 }
 
@@ -34,9 +42,19 @@ detect_version() {
     echo "${tag#v}"
 }
 
-# Read a package list file, dropping comments and blank lines, joined by commas.
+# Read package list files (missing ones are skipped), dropping comments and blank lines,
+# joined by commas.
 package_list() {
-    grep -hvE '^\s*(#|$)' "$@" | tr '\n' ',' | sed 's/,$//'
+    local f files=()
+    for f in "$@"; do [[ -f "$f" ]] && files+=("$f"); done
+    [[ ${#files[@]} -gt 0 ]] || return 0
+    grep -hvE '^\s*(#|$)' "${files[@]}" | tr '\n' ',' | sed 's/,$//'
+}
+
+# Package lists for the configured ARCH/PLATFORM.
+base_package_lists()     { echo "$REPO_DIR/packages/base.list $REPO_DIR/packages/base-$ARCH.list"; }
+firmware_package_lists() { # pc keeps the historical name firmware.list
+    if [[ "$PLATFORM" == pc ]]; then echo "$REPO_DIR/packages/firmware.list"; else echo "$REPO_DIR/packages/firmware-$PLATFORM.list"; fi
 }
 
 need_root() {
@@ -49,4 +67,24 @@ require_tools() {
     local missing=()
     for t in "$@"; do command -v "$t" >/dev/null 2>&1 || missing+=("$t"); done
     [[ ${#missing[@]} -eq 0 ]] || die "missing tools: ${missing[*]}"
+}
+
+# Kernel, initrd and squashfs of a built rootfs into a release directory (shared by the ISO and
+# the Raspberry Pi image builders).
+stage_system_files() { # rootfs, release-dir
+    local rootfs="$1" release="$2" kernels kver comp_opts
+    mapfile -t kernels < <(ls "$rootfs"/boot/vmlinuz-* 2>/dev/null)
+    [[ ${#kernels[@]} -eq 1 ]] || die "expected exactly one kernel in rootfs/boot, found ${#kernels[@]}"
+    kver="${kernels[0]##*/vmlinuz-}"
+    cp "$rootfs/boot/vmlinuz-$kver" "$release/vmlinuz"
+    cp "$rootfs/boot/initrd.img-$kver" "$release/initrd.img"
+    log "mksquashfs ($SQUASHFS_COMP)"
+    comp_opts=(-comp zstd -Xcompression-level 19)
+    if [[ "$SQUASHFS_COMP" == "xz" ]]; then
+        comp_opts=(-comp xz -Xdict-size 1M)
+        [[ "$ARCH" == amd64 ]] && comp_opts+=(-Xbcj x86)
+    fi
+    mksquashfs "$rootfs" "$release/filesystem.squashfs" \
+        "${comp_opts[@]}" -b 1M -noappend -no-progress -quiet \
+        -wildcards -e 'boot/vmlinuz*' 'boot/initrd*' 'proc/*' 'sys/*' 'dev/*' 'run/*' 'tmp/*'
 }

@@ -28,7 +28,7 @@ GitHub releases.
 | | |
 |---|---|
 | **Browser-only** | Chrome stable with normal browser controls by default, optional kiosk mode, on the [cage](https://github.com/cage-kiosk/cage) Wayland compositor. No desktop, no window manager, no login screen. Firefox and Debian Chromium are build options. |
-| **Runs almost anywhere** | Any x86-64 PC from roughly 2008 on: legacy BIOS and UEFI, Secure Boot (Debian shim), Intel/AMD/NVIDIA graphics with software-rendering fallback, Wi-Fi firmware for Intel, Realtek, Atheros, Broadcom and MediaTek. |
+| **Runs almost anywhere** | Any x86-64 PC from roughly 2008 on: legacy BIOS and UEFI, Secure Boot (Debian shim), Intel/AMD/NVIDIA graphics with software-rendering fallback, Wi-Fi firmware for Intel, Realtek, Atheros, Broadcom and MediaTek. Experimental: Raspberry Pi 3/4 SD card image ([docs/RASPBERRY-PI.md](docs/RASPBERRY-PI.md)). |
 | **Newest Debian kernel** | Linux from `trixie-backports`, signed for Secure Boot. Switch to `sid` for the bleeding edge. |
 | **Read-only, stateless** | Squashfs root, tmpfs overlay, volatile journal. A reboot restores a pristine system. |
 | **Signed A/B updates** | Installed devices check nightly, verify a minisign-signed manifest, stage the new version in the inactive slot and roll back automatically if it does not come up. |

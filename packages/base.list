@@ -44,17 +44,9 @@ pipewire-pulse
 wireplumber
 alsa-ucm-conf
 alsa-topology-conf
-# Installer / updater (bootloaders, partitioning)
+# Installer / updater (partitioning, grubenv for A/B slots; boot loaders: base-<arch>.list)
 grub-common
-grub-pc-bin
-grub-efi-amd64-bin
-grub-efi-amd64-signed
-shim-signed
-efibootmgr
 gdisk
 dosfstools
 e2fsprogs
 whiptail
-# Build-only (purged after boot assets are extracted)
-isolinux
-syslinux-common

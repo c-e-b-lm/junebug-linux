@@ -1,0 +1,4 @@
+# Boot loaders for arm64: GRUB EFI (on the Pi it is started by U-Boot's UEFI)
+grub-efi-arm64-bin
+grub-efi-arm64-signed
+efibootmgr

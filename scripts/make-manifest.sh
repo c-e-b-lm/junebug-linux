@@ -10,21 +10,26 @@ RELEASE="$OUT_DIR/release"
 # shellcheck disable=SC1091
 source "$RELEASE/release.env"
 
+# name: file name on the device; src: release asset name (prefixed for non-pc platforms)
 file_entry() {
     local f="$1"
-    jq -n --arg name "$f" --arg sha "$(sha256sum "$RELEASE/$f" | cut -d' ' -f1)" \
-        --argjson size "$(stat -c %s "$RELEASE/$f")" '{name:$name, sha256:$sha, size:$size}'
+    jq -n --arg name "$f" --arg src "$RELEASE_PREFIX$f" --arg sha "$(sha256sum "$RELEASE/$f" | cut -d' ' -f1)" \
+        --argjson size "$(stat -c %s "$RELEASE/$f")" '{name:$name, src:$src, sha256:$sha, size:$size}'
 }
+# The image a user downloads: the ISO (pc) or the compressed SD card image (rpi).
+IMAGE_FILE="$IMAGE_NAME.iso"; [[ "$PLATFORM" == pc ]] || IMAGE_FILE="$IMAGE_NAME.img.xz"
+MANIFEST="$RELEASE/$MANIFEST_NAME"
 
 jq -n \
     --arg version "$VERSION" --arg channel "$CHANNEL" --arg dist "$DIST_ID" \
     --arg kernel "$KERNEL" --arg browser "$BROWSER" --arg browser_version "$BROWSER_VERSION" \
-    --arg date "$BUILD_DATE" --arg iso "$IMAGE_NAME.iso" \
+    --arg date "$BUILD_DATE" --arg iso "$IMAGE_FILE" --arg arch "$ARCH" --arg platform "$PLATFORM" \
     --argjson files "$(jq -s . <(file_entry filesystem.squashfs) <(file_entry vmlinuz) <(file_entry initrd.img))" \
-    '{schema:1, dist:$dist, version:$version, channel:$channel, build_date:$date,
-      kernel:$kernel, browser:$browser, browser_version:$browser_version, iso:$iso, files:$files}' \
-    > "$RELEASE/manifest.json"
-log "manifest.json written"
+    '{schema:1, dist:$dist, arch:$arch, platform:$platform, version:$version, channel:$channel,
+      build_date:$date, kernel:$kernel, browser:$browser, browser_version:$browser_version,
+      iso:$iso, files:$files}' \
+    > "$MANIFEST"
+log "$MANIFEST_NAME written"
 
 KEYFILE="${MINISIGN_KEY_FILE:-}"
 if [[ -z "$KEYFILE" && -n "${MINISIGN_SECRET_KEY:-}" ]]; then
@@ -33,12 +38,12 @@ if [[ -z "$KEYFILE" && -n "${MINISIGN_SECRET_KEY:-}" ]]; then
 fi
 if [[ -n "$KEYFILE" ]]; then
     require_tools minisign
-    minisign -S -W -s "$KEYFILE" -m "$RELEASE/manifest.json" \
-        -t "$DIST_ID $VERSION" -x "$RELEASE/manifest.json.minisig"
-    minisign -V -q -p "$REPO_DIR/overlay/etc/kiosk/update.pub" -m "$RELEASE/manifest.json" \
+    minisign -S -W -s "$KEYFILE" -m "$MANIFEST" \
+        -t "$DIST_ID $VERSION $ARCH-$PLATFORM" -x "$MANIFEST.minisig"
+    minisign -V -q -p "$REPO_DIR/overlay/etc/kiosk/update.pub" -m "$MANIFEST" \
         || die "manifest signature does not verify against overlay/etc/kiosk/update.pub"
     log "manifest.json signed and verified"
 else
-    warn "no signing key: manifest.json left unsigned (installed systems will refuse it)"
+    warn "no signing key: $MANIFEST_NAME left unsigned (installed systems will refuse it)"
 fi
-jq . "$RELEASE/manifest.json"
+jq . "$MANIFEST"

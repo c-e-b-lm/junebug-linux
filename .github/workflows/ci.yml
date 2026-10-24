@@ -57,3 +57,47 @@ jobs:
             out/release/release.env
           retention-days: 7
           compression-level: 0
+
+  # Raspberry Pi image (arm64), built natively on an arm64 runner. The QEMU test boots the image
+  # through arm64 UEFI (AAVMF -> GRUB -> slot a); the Pi firmware + U-Boot stage needs hardware.
+  build-rpi:
+    needs: lint
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    env:
+      PLATFORM: rpi
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
+      - name: Install build dependencies
+        run: make deps
+      - name: Build rootfs + SD card image
+        run: sudo -E make image
+      - name: Manifest (unsigned on CI builds)
+        run: make manifest
+      - name: Boot test (QEMU virt, arm64 UEFI)
+        run: sudo -E make test-boot
+      - name: Upload QEMU logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: boot-test-logs-rpi
+          path: out/test/*.log
+          if-no-files-found: ignore
+      - name: Upload image
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junebug-ci-rpi
+          path: |
+            out/release/*.img.xz
+            out/release/manifest-*.json
+            out/release/SHA256SUMS
+            out/release/release.env
+            out/release/boot-versions.txt
+          if-no-files-found: ignore
+          retention-days: 7
+          compression-level: 0

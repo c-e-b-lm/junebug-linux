@@ -4,15 +4,25 @@
 #   boot-test.sh iso-bios      boot the ISO via isolinux (SeaBIOS)
 #   boot-test.sh iso-uefi      boot the ISO via shim+grub (OVMF)
 #   boot-test.sh install       install to a virtual disk from the ISO, then boot the disk (UEFI + BIOS)
-#   boot-test.sh all
+#   boot-test.sh all           the three pc tests above
+#   boot-test.sh rpi           PLATFORM=rpi: boot the SD card image on QEMU "virt" via arm64 UEFI
+#                              (AAVMF -> GRUB -> slot a). Covers kernel, initramfs, live-boot, GRUB
+#                              A/B config and the browser session; the Pi firmware + U-Boot stage
+#                              before GRUB needs real hardware.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 load_build_conf
-require_tools qemu-system-x86_64 qemu-img timeout
 RELEASE="$OUT_DIR/release"
 TEST_DIR="$OUT_DIR/test"
 ISO="$RELEASE/$IMAGE_NAME.iso"
-[[ -s "$ISO" ]] || die "ISO missing: $ISO"
+RPI_IMG="$OUT_DIR/img/$IMAGE_NAME.img"
+if [[ "${1:-all}" == rpi ]]; then
+    require_tools qemu-system-aarch64 qemu-img timeout
+    [[ -s "$RPI_IMG" ]] || die "Pi image missing: $RPI_IMG"
+else
+    require_tools qemu-system-x86_64 qemu-img timeout
+    [[ -s "$ISO" ]] || die "ISO missing: $ISO"
+fi
 mkdir -p "$TEST_DIR"
 TIMEOUT="${BOOT_TIMEOUT:-600}"
 MEM="${QEMU_MEM:-2048}"
@@ -22,6 +32,8 @@ OVMF_VARS="$(ls /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd /us
 
 accel=(-accel tcg)
 [[ -w /dev/kvm ]] && accel=(-accel kvm -cpu host)
+QEMU=qemu-system-x86_64
+MACHINE=(-vga std)
 
 # Credentials are passed via SMBIOS (systemd picks them up as system credentials).
 SELFTEST_CRED=(-smbios "type=11,value=io.systemd.credential:kiosk.selftest=1")
@@ -32,8 +44,8 @@ run_qemu() { # name, expected-marker, qemu args...
     : > "$serial"
     log "qemu [$name] (timeout ${TIMEOUT}s)"
     set +e
-    timeout --foreground "$TIMEOUT" qemu-system-x86_64 \
-        "${accel[@]}" -m "$MEM" -smp 2 -display none -vga std \
+    timeout --foreground "$TIMEOUT" "$QEMU" \
+        "${accel[@]}" -m "$MEM" -smp 2 -display none "${MACHINE[@]}" \
         -serial "file:$serial" -monitor none -no-reboot \
         -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
         "$@" >"$TEST_DIR/$name.qemu.log" 2>&1
@@ -80,10 +92,33 @@ test_install() {
         -drive file="$disk",if=virtio,format=qcow2
 }
 
+test_rpi() {
+    local code vars disk="$TEST_DIR/rpi.qcow2"
+    QEMU=qemu-system-aarch64
+    MACHINE=(-machine virt -device virtio-gpu-pci -device qemu-xhci -device usb-kbd)
+    accel=(-accel tcg -cpu max)   # TCG: hosted arm64 runners have no /dev/kvm
+    [[ -w /dev/kvm ]] && accel=(-accel kvm -cpu host)
+    code="$(ls /usr/share/AAVMF/AAVMF_CODE.fd /usr/share/qemu-efi-aarch64/QEMU_EFI.fd /usr/share/edk2/aarch64/QEMU_EFI.fd 2>/dev/null | head -1 || true)"
+    [[ -n "$code" ]] || die "arm64 UEFI firmware not found (install qemu-efi-aarch64)"
+    # pflash units must be exactly 64 MiB on virt.
+    cp "$code" "$TEST_DIR/rpi.code.fd"; truncate -s 64M "$TEST_DIR/rpi.code.fd"
+    vars="$TEST_DIR/rpi.vars.fd"; rm -f "$vars"
+    if [[ -f /usr/share/AAVMF/AAVMF_VARS.fd ]]; then cp /usr/share/AAVMF/AAVMF_VARS.fd "$vars"; fi
+    truncate -s 64M "$vars"
+    # Work on a copy-on-write overlay: GRUB writes grubenv, the image stays pristine.
+    rm -f "$disk"; qemu-img create -q -f qcow2 -F raw -b "$RPI_IMG" "$disk" 4G
+    TIMEOUT="${BOOT_TIMEOUT_RPI:-1500}"
+    run_qemu rpi-uefi "KIOSK-SELFTEST-OK slot=a" "${SELFTEST_CRED[@]}" \
+        -drive if=pflash,format=raw,readonly=on,file="$TEST_DIR/rpi.code.fd" \
+        -drive if=pflash,format=raw,file="$vars" \
+        -drive file="$disk",if=virtio,format=qcow2
+}
+
 case "${1:-all}" in
     iso-bios) test_iso_bios ;;
     iso-uefi) test_iso_uefi ;;
     install)  test_install ;;
     all)      test_iso_bios; test_iso_uefi; test_install ;;
-    *) die "usage: $0 {iso-bios|iso-uefi|install|all}" ;;
+    rpi)      test_rpi ;;
+    *) die "usage: $0 {iso-bios|iso-uefi|install|all|rpi}" ;;
 esac

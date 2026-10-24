@@ -1,0 +1,9 @@
+# Boot loaders for x86-64 (BIOS + UEFI with Secure Boot)
+grub-pc-bin
+grub-efi-amd64-bin
+grub-efi-amd64-signed
+shim-signed
+efibootmgr
+# Build-only (purged after boot assets are extracted)
+isolinux
+syslinux-common
