@@ -12,14 +12,18 @@ for a in "$@"; do case "$a" in --no-reboot) REBOOT=0;; --force) FORCE=1;; --chec
 slot="$(kiosk_slot)" || { kiosk_log "not an installed system (ISO/USB mode): nothing to update"; exit 0; }
 other="$(kiosk_other_slot "$slot")"
 url="${UPDATE_URL%/}"
+manifest="${MANIFEST_NAME:-manifest.json}"   # per platform, see /etc/kiosk/release
 WORK="$KIOSK_RUN/update"; mkdir -p "$WORK"
 
 # --- manifest ------------------------------------------------------------------------
-curl -fsSL --retry 3 --max-time 60 -o "$WORK/manifest.json" "$url/manifest.json" || kiosk_die "cannot download manifest from $url"
-curl -fsSL --retry 3 --max-time 60 -o "$WORK/manifest.json.minisig" "$url/manifest.json.minisig" || kiosk_die "manifest signature missing"
+curl -fsSL --retry 3 --max-time 60 -o "$WORK/manifest.json" "$url/$manifest" || kiosk_die "cannot download $manifest from $url"
+curl -fsSL --retry 3 --max-time 60 -o "$WORK/manifest.json.minisig" "$url/$manifest.minisig" || kiosk_die "manifest signature missing"
 minisign -V -q -p "$KIOSK_PUBKEY" -m "$WORK/manifest.json" -x "$WORK/manifest.json.minisig" || kiosk_die "manifest signature INVALID"
 new="$(jq -r .version "$WORK/manifest.json")"
 [[ "$(jq -r .dist "$WORK/manifest.json")" == "$DIST_ID" ]] || kiosk_die "manifest is for a different distribution"
+# Manifests without arch/platform predate multi-platform releases and are amd64/pc.
+[[ "$(jq -r '.arch // "amd64"' "$WORK/manifest.json")" == "${ARCH:-amd64}" ]] || kiosk_die "manifest is for a different architecture"
+[[ "$(jq -r '.platform // "pc"' "$WORK/manifest.json")" == "${PLATFORM:-pc}" ]] || kiosk_die "manifest is for a different platform"
 [[ "$(jq -r .channel "$WORK/manifest.json")" == "${UPDATE_CHANNEL:-$CHANNEL}" ]] || kiosk_die "manifest channel mismatch"
 cur="$(cat /etc/kiosk/version)"
 newest="$(printf '%s\n%s\n' "$cur" "$new" | sort -V | tail -1)"
@@ -43,17 +47,17 @@ have="$(du -sb "$target" | cut -f1)"
 avail="$(df --output=avail -B1 "$data" | tail -1)"
 (( avail + have > need + 64*1024*1024 )) || kiosk_die "not enough space in slot $other (need $need, free $avail)"
 
-while IFS=$'\t' read -r name sha size; do
-    [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || kiosk_die "refusing suspicious file name in manifest: $name"
+while IFS=$'\t' read -r name src sha size; do
+    [[ "$name" =~ ^[A-Za-z0-9._-]+$ && "$src" =~ ^[A-Za-z0-9._-]+$ ]] || kiosk_die "refusing suspicious file name in manifest: $name / $src"
     if [[ -f "$target/$name" && "$(sha256sum "$target/$name" | cut -d' ' -f1)" == "$sha" ]]; then
         kiosk_log "$name already present"; continue
     fi
     kiosk_log "downloading $name ($((size / 1024 / 1024)) MB)"
-    curl -fL --retry 5 --retry-all-errors --retry-delay 10 -C - -sS -o "$target/$name.part" "$url/$name" \
+    curl -fL --retry 5 --retry-all-errors --retry-delay 10 -C - -sS -o "$target/$name.part" "$url/$src" \
         || kiosk_die "download of $name failed"
     [[ "$(sha256sum "$target/$name.part" | cut -d' ' -f1)" == "$sha" ]] || { rm -f "$target/$name.part"; kiosk_die "checksum mismatch for $name"; }
     mv -f "$target/$name.part" "$target/$name"
-done < <(jq -r '.files[] | [.name, .sha256, .size] | @tsv' "$WORK/manifest.json")
+done < <(jq -r '.files[] | [.name, (.src // .name), .sha256, .size] | @tsv' "$WORK/manifest.json")
 echo "$new" > "$target/version"; rm -f "$target/.staging"
 sync
 

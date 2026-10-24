@@ -10,7 +10,16 @@ make test-boot                     # QEMU smoke tests, needs /dev/kvm for reason
 sudo make clean
 ```
 
-Variables (`build.conf`): `BROWSER=chrome|firefox|chromium`, `KERNEL_SUITE=trixie|trixie-backports|sid`,
+Raspberry Pi image (arm64): build on an arm64 host (or an x86-64 host with `qemu-user-static`
+binfmt support, much slower), see [RASPBERRY-PI.md](RASPBERRY-PI.md):
+
+```sh
+PLATFORM=rpi make deps
+PLATFORM=rpi sudo -E make image    # out/release/junebug-<version>-arm64-rpi.img.xz
+PLATFORM=rpi sudo -E make test-boot
+```
+
+Variables (`build.conf`): `PLATFORM=pc|rpi`, `BROWSER=chrome|firefox|chromium`, `KERNEL_SUITE=trixie|trixie-backports|sid`,
 `FIRMWARE_NVIDIA=1`, `SQUASHFS_COMP=zstd|xz`, `VERSION=2026.10.20`, `UPDATE_URL=...`, `MIRROR=...`.
 
 Quick iteration without rebuilding the rootfs: edit `overlay/` or `boot/`, then

@@ -1,0 +1,5 @@
+# Firmware for Raspberry Pi 3/4 (installed from KERNEL_SUITE). The GPU boot firmware
+# (raspi-firmware) and U-Boot are not installed into the image; chroot-setup.sh extracts
+# them for the boot partition so no kernel hooks write to /boot/firmware.
+firmware-brcm80211
+firmware-linux-free

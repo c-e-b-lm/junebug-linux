@@ -1,0 +1,13 @@
+# Raspberry Pi firmware configuration (boot partition KIOSK_EFI of the Pi image).
+# The GPU firmware loads U-Boot, which provides UEFI and starts GRUB (EFI/boot/bootaa64.efi);
+# GRUB then boots slot a or b exactly like on a PC (boot/grub/grub.cfg + grubenv).
+[all]
+arm_64bit=1
+kernel=u-boot.bin
+# Device trees from Debian's kernel (bcm2711-*.dtb / bcm2837-*.dtb on this partition).
+upstream_kernel=1
+# U-Boot on the Pi 3 needs a fixed core clock for its serial console; also handy for debugging.
+enable_uart=1
+disable_overscan=1
+# The kernel's vc4 KMS driver sets up the display; the firmware keeps out of the way.
+disable_fw_kms_setup=1

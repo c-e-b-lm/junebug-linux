@@ -7,6 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 load_build_conf
 need_root "$@"
 require_tools mksquashfs xorriso mformat mcopy mmd mkfs.vfat
+[[ "$PLATFORM" == pc ]] || die "build-iso.sh builds the pc ISO; PLATFORM=$PLATFORM uses build-rpi-image.sh (make image)"
 
 ROOTFS="$OUT_DIR/rootfs"
 BOOTASSETS="$OUT_DIR/bootassets"
@@ -16,20 +17,7 @@ ISO_DIR="$OUT_DIR/iso"
 rm -rf "$RELEASE" "$ISO_DIR"
 mkdir -p "$RELEASE" "$ISO_DIR"/{live,boot/grub,isolinux,EFI/boot,.disk}
 
-# --- kernel + initrd ----------------------------------------------------------
-mapfile -t kernels < <(ls "$ROOTFS"/boot/vmlinuz-* 2>/dev/null)
-[[ ${#kernels[@]} -eq 1 ]] || die "expected exactly one kernel in rootfs/boot, found ${#kernels[@]}"
-KVER="${kernels[0]##*/vmlinuz-}"
-cp "$ROOTFS/boot/vmlinuz-$KVER" "$RELEASE/vmlinuz"
-cp "$ROOTFS/boot/initrd.img-$KVER" "$RELEASE/initrd.img"
-
-# --- squashfs -----------------------------------------------------------------
-log "mksquashfs ($SQUASHFS_COMP)"
-comp_opts=(-comp zstd -Xcompression-level 19)
-[[ "$SQUASHFS_COMP" == "xz" ]] && comp_opts=(-comp xz -Xbcj x86 -Xdict-size 1M)
-mksquashfs "$ROOTFS" "$RELEASE/filesystem.squashfs" \
-    "${comp_opts[@]}" -b 1M -noappend -no-progress -quiet \
-    -wildcards -e 'boot/vmlinuz*' 'boot/initrd*' 'proc/*' 'sys/*' 'dev/*' 'run/*' 'tmp/*'
+stage_system_files "$ROOTFS" "$RELEASE"
 
 # --- ISO tree -----------------------------------------------------------------
 CMDLINE="$(tr -d '\n' < "$REPO_DIR/boot/cmdline.txt")"

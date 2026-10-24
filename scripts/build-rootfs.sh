@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Stage 1: bootstrap the Debian root filesystem with mmdebstrap and customise it.
-# Produces: $OUT_DIR/rootfs (directory) and $OUT_DIR/bootassets (isolinux/shim/grub binaries).
+# Produces: $OUT_DIR/rootfs (directory) and $OUT_DIR/bootassets (boot loader binaries:
+# isolinux/shim/grub for pc; Pi firmware, U-Boot, GRUB and device trees for rpi).
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 load_build_conf
@@ -21,7 +22,7 @@ KEYRING="$KEYRING_DIR/debian-archive-keyring.gpg"
 if [[ ! -s "$KEYRING" ]]; then
     log "fetching debian-archive-keyring from Debian"
     pkgs="$(curl -fsSL "https://deb.debian.org/debian/dists/$SUITE/main/binary-all/Packages.gz" | gunzip)" || \
-        pkgs="$(curl -fsSL "https://deb.debian.org/debian/dists/$SUITE/main/binary-amd64/Packages.gz" | gunzip)"
+        pkgs="$(curl -fsSL "https://deb.debian.org/debian/dists/$SUITE/main/binary-$ARCH/Packages.gz" | gunzip)"
     entry="$(awk 'BEGIN{RS="";FS="\n"} $1=="Package: debian-archive-keyring"' <<<"$pkgs")"
     fname="$(sed -n 's/^Filename: //p' <<<"$entry")"
     fsum="$(sed -n 's/^SHA256: //p' <<<"$entry")"
@@ -35,15 +36,17 @@ fi
 # --- Environment passed into the chroot ------------------------------------
 BUILD_ENV="$OUT_DIR/build.env"
 {
-    for v in DIST_NAME DIST_ID SUITE KERNEL_SUITE ARCH BROWSER FIRMWARE_NVIDIA UPDATE_URL UPDATE_CHANNEL VERSION; do
+    for v in DIST_NAME DIST_ID SUITE KERNEL_SUITE PLATFORM ARCH MANIFEST_NAME BROWSER FIRMWARE_NVIDIA UPDATE_URL UPDATE_CHANNEL VERSION; do
         printf '%s=%q\n' "$v" "${!v}"
     done
-    printf 'FIRMWARE_PACKAGES=%q\n' "$(package_list "$REPO_DIR/packages/firmware.list")"
+    # shellcheck disable=SC2046  # list of file names
+    printf 'FIRMWARE_PACKAGES=%q\n' "$(package_list $(firmware_package_lists))"
     printf 'BUILD_DATE=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$BUILD_ENV"
 
 COMPONENTS="main contrib non-free non-free-firmware"
-INCLUDE="$(package_list "$REPO_DIR/packages/base.list")"
+# shellcheck disable=SC2046  # list of file names
+INCLUDE="$(package_list $(base_package_lists))"
 
 log "bootstrapping Debian $SUITE ($ARCH) into $ROOTFS"
 mmdebstrap \
