@@ -34,6 +34,7 @@ accel=(-accel tcg)
 [[ -w /dev/kvm ]] && accel=(-accel kvm -cpu host)
 QEMU=qemu-system-x86_64
 MACHINE=(-vga std)
+NET=(-netdev "user,id=n0" -device "virtio-net-pci,netdev=n0")
 
 # Credentials are passed via SMBIOS (systemd picks them up as system credentials).
 SELFTEST_CRED=(-smbios "type=11,value=io.systemd.credential:kiosk.selftest=1")
@@ -57,7 +58,7 @@ run_qemu() { # name, expected-marker, qemu args...
     timeout --foreground "$TIMEOUT" "$QEMU" \
         "${accel[@]}" -m "$MEM" -smp 2 -display none "${MACHINE[@]}" \
         -serial "file:$serial" -monitor none -no-reboot \
-        -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
+        "${NET[@]}" \
         "$@" >"$TEST_DIR/$name.qemu.log" 2>&1
     local rc=$?
     set -e
@@ -108,6 +109,8 @@ test_rpi() {
     local code vars disk="$TEST_DIR/rpi.qcow2"
     QEMU=qemu-system-aarch64
     MACHINE=(-machine virt -device virtio-gpu-pci -device qemu-xhci -device usb-kbd)
+    # No PXE option ROM (ipxe-qemu is only a recommendation of qemu-system-arm on Ubuntu).
+    NET=(-netdev "user,id=n0" -device "virtio-net-pci,netdev=n0,romfile=")
     accel=(-accel tcg -cpu max)   # TCG: hosted arm64 runners have no /dev/kvm
     [[ -w /dev/kvm ]] && accel=(-accel kvm -cpu host)
     code="$(ls /usr/share/AAVMF/AAVMF_CODE.fd /usr/share/qemu-efi-aarch64/QEMU_EFI.fd /usr/share/edk2/aarch64/QEMU_EFI.fd 2>/dev/null | head -1 || true)"
