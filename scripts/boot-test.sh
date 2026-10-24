@@ -38,6 +38,16 @@ MACHINE=(-vga std)
 # Credentials are passed via SMBIOS (systemd picks them up as system credentials).
 SELFTEST_CRED=(-smbios "type=11,value=io.systemd.credential:kiosk.selftest=1")
 
+# On GitHub Actions, put a log tail into an error annotation (readable via the checks API
+# without downloading artifacts).
+ci_annotate() { # title, file
+    [[ -n "${GITHUB_ACTIONS:-}" && -s "$2" ]] || return 0
+    local msg
+    msg="$(tail -n 80 "$2" | tr -d '\r' | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')"
+    msg="${msg//'%'/'%25'}"; msg="${msg//$'\n'/'%0A'}"
+    echo "::error title=$1::$msg"
+}
+
 run_qemu() { # name, expected-marker, qemu args...
     local name="$1" marker="$2"; shift 2
     local serial="$TEST_DIR/$name.serial.log"
@@ -57,6 +67,8 @@ run_qemu() { # name, expected-marker, qemu args...
     fi
     warn "[$name] FAIL (qemu rc=$rc). Serial log tail:"
     tail -n 60 "$serial" >&2
+    ci_annotate "boot test $name: qemu output" "$TEST_DIR/$name.qemu.log"
+    ci_annotate "boot test $name: serial tail" "$serial"
     return 1
 }
 
